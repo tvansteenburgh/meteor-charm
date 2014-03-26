@@ -1,0 +1,18 @@
+options:
+  app-name:
+    type: string
+    default: "meteor-app"
+    description: "Name of your app"
+  repo-url:
+    type: string
+    default: ""
+    description: "Repo URL from which the Meteor app will be cloned"
+  repo-type:
+    type: string
+    default: "git"
+    description: "git or hg"
+  port:
+    type: int
+    default: 3000
+    description: "Port on which the Meteor app will be exposed"
+

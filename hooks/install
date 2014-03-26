@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -e
+
+# meteor install script needs HOME set
+export HOME=/root
+
+app_name=`config-get app-name`
+repo_url=`config-get repo-url`
+repo_type=`config-get repo-type`
+port=`config-get port`
+mongo_url=mongodb://localhost:27017/${app_name}
+app_dir=~/${app_name}
+
+juju-log "Installing dependencies..."
+add-apt-repository ppa:chris-lea/node.js
+apt-get update
+apt-get -y install -qq nodejs build-essential curl
+
+juju-log "Installing Meteor..."
+curl https://install.meteor.com | /bin/sh
+
+if [ -z "${repo_url}" ] ; then
+  juju-log "Creating demo app..."
+  meteor create ${app_dir}
+else
+  juju-log "Cloning app..."
+  case ${repo_type} in
+    git )
+      apt-get -y install git
+      git clone ${repo_url} ${app_dir}
+      ;;
+    hg | mercurial )
+      apt-get -y install mercurial
+      hg clone ${repo_url} ${app_dir}
+      ;;
+  esac
+fi
+
+juju-log "Bundling app..."
+cd ${app_dir}
+meteor bundle bundle.tgz
+tar -xzf bundle.tgz
+rm -rf bundle/programs/server/node_modules/fibers
+npm install fibers@1.0.1
+
+juju-log "Installing Upstart script..."
+cat > /etc/init/${app_name}.conf <<EOS
+description "${app_name} Meteor app"
+
+start on (net-device-up
+          and local-filesystems
+          and runlevel [2345])
+stop on runlevel [!2345]
+
+expect fork
+respawn
+
+script
+  export PORT=${port}
+  export MONGO_URL=${mongo_url}
+  exec node ${app_dir}/bundle/main.js >> /var/log/${app_name}.log 2>&1 &
+end script
+EOS

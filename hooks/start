@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -e
+
+app_name=`config-get app-name`
+
+service ${app_name} restart || service ${app_name} start
