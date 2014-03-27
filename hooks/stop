@@ -4,4 +4,5 @@ set -e
 
 app_name=`config-get app-name`
 
+juju-log "Stopping ${app_name}"
 service ${app_name} stop

@@ -9,3 +9,6 @@ subordinate: false
 provides:
   website:
     interface: http
+requires:
+  mongodb:
+    interface: mongodb

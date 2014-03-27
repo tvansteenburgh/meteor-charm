@@ -1,0 +1,40 @@
+#!/bin/bash
+
+set -e
+
+# Get the database settings; if not set, wait for this hook to be
+# invoked again
+host=`relation-get private-address`
+if [ -z "$host" ] ; then
+    exit 0 # wait for future handshake from database service unit
+fi
+
+relation_port=`relation-get port`
+db_port=${relation_port:-27017}
+
+app_name=`config-get app-name`
+port=`config-get port`
+mongo_url=mongodb://${host}:${db_port}/${app_name}
+app_dir=~/${app_name}
+
+juju-log "Installing Upstart script..."
+cat > /etc/init/${app_name}.conf <<EOS
+description "${app_name} Meteor app"
+
+start on (net-device-up
+          and local-filesystems
+          and runlevel [2345])
+stop on runlevel [!2345]
+
+expect fork
+respawn
+
+script
+  export PORT=${port}
+  export MONGO_URL=${mongo_url}
+  exec node ${app_dir}/bundle/main.js >> /var/log/${app_name}.log 2>&1 &
+end script
+EOS
+
+juju-log "(Re)starting ${app_name}"
+service ${app_name} restart || service ${app_name} start
