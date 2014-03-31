@@ -2,17 +2,30 @@ options:
   app-name:
     type: string
     default: "meteor-app"
-    description: "Name of your app"
+    description: "Name of your app."
   repo-url:
     type: string
     default: ""
-    description: "Repo URL from which the Meteor app will be cloned"
+    description: "Repo URL from which the Meteor app will be cloned."
   repo-type:
     type: string
     default: "git"
     description: "git or hg"
+  repo-revision:
+    type: string
+    default: ""
+    description: >
+      Branch name, tag name, or other revision identifier that can
+      be used in a `git checkout` or `hg update` command. Default
+      is `master` (git) or `default` (hg).
   port:
     type: int
     default: 3000
-    description: "Port on which the Meteor app will be exposed"
-
+    description: "Port on which the Meteor app will be exposed."
+  bundled:
+    type: boolean
+    default: false
+    description: >
+      The source repo contains an already-bundled Meteor app. If
+      this is true, your repo must contain a top-level `bundle/`
+      directory.

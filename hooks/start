@@ -1,8 +1,1 @@
-#!/bin/bash
-
-set -e
-
-app_name=`config-get app-name`
-
-juju-log "(Re)starting ${app_name}"
-service ${app_name} restart || service ${app_name} start
+hooks.py
