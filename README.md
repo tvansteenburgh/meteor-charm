@@ -43,8 +43,8 @@ To run a different demo app, try any of the following:
 To run your own app, you must provide a Git or Mercurial clone url,
 e.g.:
 
-  juju set meteor repo-type=git repo-url=https://github.com/SachaG/Telescope.git
-  juju set meteor repo-type=hg repo-url=https://tvansteenburgh@bitbucket.org/tvansteenburgh/planning-poker
+  juju set meteor repo-type=git repo-url=https://github.com/tvansteenburgh/Telescope.git
+  juju set meteor repo-type=hg repo-url=https://bitbucket.org/tvansteenburgh/planning-poker
 
 If you push new changes to your repo, you can update the running app to
 the new version:
