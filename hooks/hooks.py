@@ -190,7 +190,7 @@ def init_code(config):
                 config['repo-revision'])
     else:
         hookenv.log('Creating demo app')
-        subprocess.check_call(['meteor', 'create', CODE_DIR])
+        subprocess.check_call(['meteor', 'create', '--example', CODE_DIR])
 
 
 def init_bundle(config):
@@ -238,6 +238,7 @@ def install():
     init_code(config)
     init_bundle(config)
 
+    hookenv.open_port(config['port'])
     subprocess.check_call(['chown', '-R', '{user}:{user}'.format(user=USER),
         BASE_DIR])
     config['mongo_url'] = 'mongodb://localhost:27017/' + config['app-name']
