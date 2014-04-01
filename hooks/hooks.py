@@ -27,7 +27,8 @@ BUNDLE_ARCHIVE = BASE_DIR + '/bundle.tgz'
 METEOR_CONFIG = BASE_DIR + '/.juju-config'
 NODEJS_REPO = 'ppa:chris-lea/node.js'
 PACKAGES = ['nodejs', 'build-essential', 'curl']
-INSTALL_CMD = 'curl http://install.meteor.com | /bin/sh'
+DOWNLOAD_CMD = 'curl http://install.meteor.com -o /tmp/meteor-install'
+INSTALL_CMD = '/bin/sh /tmp/meteor-install'
 
 
 class Config(object):
@@ -190,7 +191,8 @@ def init_code(config):
                 config['repo-revision'])
     else:
         hookenv.log('Creating demo app')
-        subprocess.check_call(['meteor', 'create', '--example', CODE_DIR])
+        subprocess.check_call(['meteor', 'create', '--example',
+            config['demo-app'], CODE_DIR])
 
 
 def init_bundle(config):
@@ -231,9 +233,8 @@ def install():
     fetch.apt_install(PACKAGES)
 
     hookenv.log('Installing Meteor')
-    subprocess.check_call(
-        'curl http://install.meteor.com -o /tmp/meteor-install'.split())
-    subprocess.check_call('/bin/sh /tmp/meteor-install'.split())
+    subprocess.check_call(DOWNLOAD_CMD.split())
+    subprocess.check_call(INSTALL_CMD.split())
 
     init_code(config)
     init_bundle(config)
@@ -241,25 +242,30 @@ def install():
     hookenv.open_port(config['port'])
     subprocess.check_call(['chown', '-R', '{user}:{user}'.format(user=USER),
         BASE_DIR])
-    config['mongo_url'] = 'mongodb://localhost:27017/' + config['app-name']
+
+    config['mongo_url'] = ''
     write_upstart(config)
     config.save(METEOR_CONFIG)
+    # wait for mongodb to join before starting
 
 
 @hooks.hook('config-changed')
 def config_changed():
     config = Config(METEOR_CONFIG)
 
-    if config.changed('repo-url'):
+    if config.changed('repo-url') or config.changed('demo-app'):
         hookenv.log('repo-url changed')
         ensure_rmtree(CODE_DIR)
         init_code(config)
-    elif config.changed('repo-revision'):
+    elif config.changed('repo-revision') and config['repo-url']:
+        with chdir(CODE_DIR):
+            subprocess.check_call([config['repo-type'], 'pull'])
         checkout(config['repo-type'], CODE_DIR, config['repo-revision'])
 
     if (config.changed('repo-url') or
             config.changed('repo-revision') or
-            config.changed('bundled')):
+            config.changed('bundled') or
+            config.changed('demo-app')):
         init_bundle(config)
 
     if config.changed('port'):
@@ -271,14 +277,15 @@ def config_changed():
         BASE_DIR])
 
     if config.previous('mongo_url'):
-        mongo_url = config.previous('mongo_url').rsplit('/', 1)[0] + '/'
-    else:
-        mongo_url = 'mongodb://localhost:27017/'
+        mongo_host = config.previous('mongo_url').rsplit('/', 1)[0]
+        mongo_url = '{}/{}'.format(mongo_host, config['app-name'])
+        config['mongo_url'] = mongo_url
 
-    config['mongo_url'] = mongo_url + config['app-name']
     write_upstart(config)
     config.save(METEOR_CONFIG)
-    start()
+    # only start/restart if we're in a mongodb relation
+    if hookenv.is_relation_made('mongodb'):
+        start()
 
 
 @hooks.hook('mongodb-relation-changed')
@@ -288,12 +295,28 @@ def mongodb_relation_changed():
     if not db_host:
         return
     db_port = hookenv.relation_get('port') or '27017'
-    mongo_url = 'mongodb://{host}:{port}/{app_name}'.format(
-            host=db_host, port=db_port, app_name=config['app_name'])
-    config['mongo_url'] = mongo_url
+    config['mongo_url'] = 'mongodb://{host}:{port}/{app_name}'.format(
+            host=db_host, port=db_port, app_name=config['app-name'])
     write_upstart(config)
     config.save(METEOR_CONFIG)
     start()
+
+
+@hooks.hook('mongodb-relation-departed')
+def mongodb_relation_departed():
+    host.service_stop(SERVICE)
+
+
+@hooks.hook('upgrade-charm')
+def upgrade_charm():
+    hookenv.log('Upgrading Meteor')
+    config = Config(METEOR_CONFIG)
+
+    subprocess.check_call(DOWNLOAD_CMD.split())
+    subprocess.check_call(INSTALL_CMD.split())
+    init_bundle(config)
+    if host.service_running(SERVICE):
+        start()
 
 
 @hooks.hook('start')
