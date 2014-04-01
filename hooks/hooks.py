@@ -44,6 +44,7 @@ class Config(object):
         """
         self.cur_dict = hookenv.config()
         self.prev_dict = None
+        self.path = path
         if path:
             self.load_previous(path)
 
@@ -76,10 +77,21 @@ class Config(object):
             return self.prev_dict.get(key)
         return None
 
-    def save(self, path):
-        """Save this config to `path`.
+    def save(self, path=None):
+        """Save this config to `path`, or to the path from which
+        it was loaded. This is a no-op of path is None or this
+        config was not loaded from a file.
+
+        Preserves items in prev_dict that do not exist in cur_dict.
 
         """
+        path = path or self.path
+        if not path:
+            return
+        if self.prev_dict:
+            for k, v in self.prev_dict.iteritems():
+                if k not in self.cur_dict:
+                    self.cur_dict[k] = v
         with open(path, 'w') as f:
             json.dump(self.cur_dict, f)
 
@@ -220,7 +232,7 @@ def init_bundle(config):
 
 @hooks.hook('install')
 def install():
-    config = Config()
+    config = Config(METEOR_CONFIG)
 
     host.adduser(USER, password='')
     host.mkdir(BASE_DIR, owner=USER, group=USER)
@@ -247,7 +259,7 @@ def install():
 
     config['mongo_url'] = ''
     write_upstart(config)
-    config.save(METEOR_CONFIG)
+    config.save()
     # wait for mongodb to join before starting
 
 
@@ -276,6 +288,12 @@ def config_changed():
         hookenv.open_port(config['port'])
         if config.previous('port'):
             hookenv.close_port(config.previous('port'))
+        if hookenv.is_relation_made('website'):
+            hookenv.relation_set(
+                    relation_id=config.previous('website-relation-id'),
+                relation_settings={
+                    'port': config['port'],
+                    'hostname': hookenv.unit_private_ip()})
 
     subprocess.check_call(['chown', '-R', '{user}:{user}'.format(user=USER),
         BASE_DIR])
@@ -292,7 +310,7 @@ def config_changed():
 
 @hooks.hook('mongodb-relation-changed')
 def mongodb_relation_changed():
-    config = Config()
+    config = Config(METEOR_CONFIG)
     db_host = hookenv.relation_get('private-address')
     if not db_host:
         return
@@ -300,7 +318,7 @@ def mongodb_relation_changed():
     config['mongo_url'] = 'mongodb://{host}:{port}/{app_name}'.format(
             host=db_host, port=db_port, app_name=config['app-name'])
     write_upstart(config)
-    config.save(METEOR_CONFIG)
+    config.save()
     start()
 
 
@@ -334,11 +352,14 @@ def stop():
     host.service_stop(SERVICE)
 
 
-@hooks.hook('website-relation-changed')
-def website_relation_changed():
-    config = Config()
+@hooks.hook('website-relation-joined')
+def website_relation_joined():
+    config = Config(METEOR_CONFIG)
     hookenv.relation_set(port=config['port'],
             hostname=hookenv.unit_private_ip())
+    # save relation id so we can inform the remote side if we change ports
+    config['website-relation-id'] = os.environ['JUJU_RELATION_ID']
+    config.save(METEOR_CONFIG)
 
 
 if __name__ == "__main__":
