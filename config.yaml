@@ -8,7 +8,7 @@ options:
     default: todos
     description: >
       The name of the Meteor demo app to install (leaderboard,
-      parties, todos, wordplay). This setting is ignored if
+      todos, wordplay). This setting is ignored if
       repo-url is set.
   repo-url:
     type: string
@@ -35,6 +35,6 @@ options:
     type: boolean
     default: false
     description: >
-      The source repo contains an already-bundled Meteor app. If
-      this is true, your repo must contain a top-level `bundle/`
-      directory.
+      Set to true if the source repo contains an already-bundled
+      Meteor app. If set to true, your repo must contain a top-level
+      `bundle/` directory.

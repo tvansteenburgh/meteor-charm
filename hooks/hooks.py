@@ -83,6 +83,9 @@ class Config(object):
         with open(path, 'w') as f:
             json.dump(self.cur_dict, f)
 
+    def get(self, key, default=None):
+        return self.cur_dict.get(key, default)
+
     def __getitem__(self, key):
         return self.cur_dict[key]
 
@@ -105,6 +108,7 @@ def write_upstart(config):
 
     env PORT={port}
     env MONGO_URL={mongo_url}
+    env ROOT_URL={root_url}
 
     exec node {app_dir}/bundle/main.js
     """)
@@ -113,8 +117,10 @@ def write_upstart(config):
             app_user=USER,
             app_dir=BASE_DIR,
             app_name=config['app-name'],
-            mongo_url=config['mongo_url'],
+            mongo_url=config.get('mongo_url', ''),
             port=config['port'],
+            root_url='http://{}:{}/'.format(
+                hookenv.unit_private_ip(), config['port']),
             ))
 
 
@@ -191,7 +197,7 @@ def init_code(config):
                 config['repo-revision'])
     else:
         hookenv.log('Creating demo app')
-        subprocess.check_call(['meteor', 'create', '--example',
+        subprocess.check_call(['mrt', 'create', '--example',
             config['demo-app'], CODE_DIR])
 
 
@@ -203,18 +209,13 @@ def init_bundle(config):
     if not config['bundled']:
         hookenv.log('Bundling app')
         with chdir(CODE_DIR):
-            subprocess.check_call(['meteor', 'bundle', BUNDLE_ARCHIVE])
+            subprocess.check_call(['mrt', 'bundle', BUNDLE_ARCHIVE])
         with chdir(BASE_DIR):
             subprocess.check_call(['tar', '-xzf', BUNDLE_ARCHIVE])
         os.remove(BUNDLE_ARCHIVE)
     else:
         hookenv.log('Copying bundle from repo')
         shutil.copytree(os.path.join(CODE_DIR, 'bundle'), BUNDLE_DIR)
-
-    hookenv.log('Installing node module: fibers@1.0.1')
-    with chdir(os.path.join(BUNDLE_DIR, 'programs', 'server', 'node_modules')):
-        shutil.rmtree('fibers')
-        subprocess.check_call('npm install fibers@1.0.1'.split())
 
 
 @hooks.hook('install')
@@ -235,6 +236,7 @@ def install():
     hookenv.log('Installing Meteor')
     subprocess.check_call(DOWNLOAD_CMD.split())
     subprocess.check_call(INSTALL_CMD.split())
+    subprocess.check_call('npm install -g meteorite'.split())
 
     init_code(config)
     init_bundle(config)
@@ -252,6 +254,7 @@ def install():
 @hooks.hook('config-changed')
 def config_changed():
     config = Config(METEOR_CONFIG)
+    os.environ['HOME'] = os.path.expanduser('~' + USER)
 
     if config.changed('repo-url') or config.changed('demo-app'):
         hookenv.log('repo-url changed')
@@ -283,15 +286,13 @@ def config_changed():
 
     write_upstart(config)
     config.save(METEOR_CONFIG)
-    # only start/restart if we're in a mongodb relation
-    if hookenv.is_relation_made('mongodb'):
-        start()
+    start()
 
 
 @hooks.hook('mongodb-relation-changed')
 def mongodb_relation_changed():
     config = Config()
-    db_host = relation.get('private-address')
+    db_host = hookenv.relation_get('private-address')
     if not db_host:
         return
     db_port = hookenv.relation_get('port') or '27017'
@@ -321,7 +322,10 @@ def upgrade_charm():
 
 @hooks.hook('start')
 def start():
-    host.service_restart(SERVICE) or host.service_start(SERVICE)
+    if hookenv.is_relation_made('mongodb'):
+        host.service_restart(SERVICE) or host.service_start(SERVICE)
+    else:
+        hookenv.log('Not starting - mongodb relation not present')
 
 
 @hooks.hook('stop')
