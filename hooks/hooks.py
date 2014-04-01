@@ -1,15 +1,17 @@
 #!/usr/bin/python
 
 from contextlib import contextmanager
+import json
 import os
 import shutil
 import subprocess
 import sys
+import textwrap
 
-sys.path.insert(0, os.environ['CHARM_DIR'])
+sys.path.insert(0, os.path.join(os.environ['CHARM_DIR'], 'lib'))
 
-from lib.charmhelpers import fetch
-from lib.charmhelpers.core import (
+from charmhelpers import fetch
+from charmhelpers.core import (
         hookenv,
         host,
         )
@@ -51,7 +53,7 @@ class Config(object):
         """
         try:
             with open(path) as f:
-                self.prev_dict = json.load(path)
+                self.prev_dict = json.load(f)
         except IOError:
             pass
 
@@ -84,12 +86,12 @@ class Config(object):
         return self.cur_dict[key]
 
     def __setitem__(self, key, val):
-        self.cur_dict[key] = value
+        self.cur_dict[key] = val
 
 
 def write_upstart(config):
     upstart = textwrap.dedent("""\
-    description "Meteor app '{app-name}'"
+    description "Meteor app '{app_name}'"
 
     start on (net-device-up
               and local-filesystems
@@ -109,7 +111,9 @@ def write_upstart(config):
         f.write(upstart.format(
             app_user=USER,
             app_dir=BASE_DIR,
-            **config
+            app_name=config['app-name'],
+            mongo_url=config['mongo_url'],
+            port=config['port'],
             ))
 
 
@@ -123,7 +127,7 @@ def chdir(path):
         os.chdir(path)
         yield
     finally:
-        os.chdir(cwv)
+        os.chdir(cwd)
 
 
 def clone(repo_type, url, dest=None, rev=None):
@@ -194,7 +198,7 @@ def init_bundle(config):
 
     """
     ensure_rmtree(BUNDLE_DIR)
-    if config['bundled']:
+    if not config['bundled']:
         hookenv.log('Bundling app')
         with chdir(CODE_DIR):
             subprocess.check_call(['meteor', 'bundle', BUNDLE_ARCHIVE])
@@ -206,16 +210,16 @@ def init_bundle(config):
         shutil.copytree(os.path.join(CODE_DIR, 'bundle'), BUNDLE_DIR)
 
     hookenv.log('Installing node module: fibers@1.0.1')
-    shutil.rmtree(os.path.join(BUNDLE_DIR,
-        'programs/server/node_modules/fibers'))
-    subprocess.check_call('npm install fibers@1.0.1')
+    with chdir(os.path.join(BUNDLE_DIR, 'programs', 'server', 'node_modules')):
+        shutil.rmtree('fibers')
+        subprocess.check_call('npm install fibers@1.0.1'.split())
 
 
 @hooks.hook('install')
 def install():
     config = Config()
 
-    host.adduser(USER)
+    host.adduser(USER, password='')
     host.mkdir(BASE_DIR, owner=USER, group=USER)
 
     # Meteor install script needs this
@@ -227,14 +231,16 @@ def install():
     fetch.apt_install(PACKAGES)
 
     hookenv.log('Installing Meteor')
-    subprocess.check_call(INSTALL_CMD)
+    subprocess.check_call(
+        'curl http://install.meteor.com -o /tmp/meteor-install'.split())
+    subprocess.check_call('/bin/sh /tmp/meteor-install'.split())
 
     init_code(config)
     init_bundle(config)
 
     subprocess.check_call(['chown', '-R', '{user}:{user}'.format(user=USER),
         BASE_DIR])
-    config['mongo_url'] = 'mongodb://localhost:27017/' + config['app_name']
+    config['mongo_url'] = 'mongodb://localhost:27017/' + config['app-name']
     write_upstart(config)
     config.save(METEOR_CONFIG)
 
@@ -254,6 +260,11 @@ def config_changed():
             config.changed('repo-revision') or
             config.changed('bundled')):
         init_bundle(config)
+
+    if config.changed('port'):
+        hookenv.open_port(config['port'])
+        if config.previous('port'):
+            hookenv.close_port(config.previous('port'))
 
     subprocess.check_call(['chown', '-R', '{user}:{user}'.format(user=USER),
         BASE_DIR])
@@ -299,3 +310,8 @@ def website_relation_changed():
     config = Config()
     hookenv.relation_set(port=config['port'],
             hostname=hookenv.unit_private_ip())
+
+
+if __name__ == "__main__":
+    # execute a hook based on the name the program is called by
+    hooks.execute(sys.argv)
