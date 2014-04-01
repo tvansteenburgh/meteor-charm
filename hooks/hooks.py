@@ -262,7 +262,8 @@ def config_changed():
         init_code(config)
     elif config.changed('repo-revision') and config['repo-url']:
         with chdir(CODE_DIR):
-            subprocess.check_call([config['repo-type'], 'pull'])
+            subprocess.check_call([config['repo-type'], 'pull',
+                config['repo-url']])
         checkout(config['repo-type'], CODE_DIR, config['repo-revision'])
 
     if (config.changed('repo-url') or

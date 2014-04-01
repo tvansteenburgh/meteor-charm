@@ -1,33 +1,60 @@
 # Overview
 
-This charm deploys a Meteor [http://meteor.com] application from source
-control (git or hg repo).
+This charm deploys a Meteor [http://meteor.com] application.
+
+You can deploy your own app by providing a Git or Mercurial repo url,
+or you can deploy any of the five built-in demo apps.
 
 # Usage
 
-If you deploy this charm without overriding any of the default
-configuration, a sample Meteor app will be deployed.
+The quickest way to get started is to deploy the charm with the default
+configuration:
 
-When deploying a real app, the charm assumes that you've created a
-Meteor app by running `meteor create <app_name>` and pushed the contents
-of the `<app_name>` directory to a publicly accessible git or hg repo.
+  juju deploy meteor
+  juju deploy mongodb
+  juju add-relation meteor mongodb
+  juju expose meteor
 
-Create a ~/meteor-app.yaml config file:
+Alternatively, you can deploy behind HAProxy:
 
-  meteor:
-    app-name: <app_name>
-    repo-url: <clone url>
+  juju deploy meteor
+  juju deploy mongodb
+  juju deploy haproxy
+  juju add-relation meteor mongodb
+  juju add-relation meteor haproxy
+  juju expose haproxy
 
-Deploy the app:
+After deploying with the default configuration, the "todos" demo app
+will be accessible over http on the public ip and port of the exposed
+service. Use `juju status` to find the public ip and port.
 
-  juju deploy --config ~/meteor-app.yaml meteor
+## Deploying Demo Apps
 
-Once `juju status` reports that the service is started, browse the app:
+To run a different demo app, try any of the following:
 
-  http://ip-address:3000
+  juju set meteor demo-app=leaderboard
+  juju set meteor demo-app=wordplay
+  juju set meteor demo-app=parties
+  juju set meteor demo-app=clock
+  juju set meteor demo-app=todos
+
+## Deploying from Git or Mercurial
+
+To run your own app, you must provide a Git or Mercurial clone url,
+e.g.:
+
+  juju set meteor repo-type=git repo-url=https://github.com/SachaG/Telescope.git
+  juju set meteor repo-type=hg repo-url=https://tvansteenburgh@bitbucket.org/tvansteenburgh/planning-poker
+
+If you push new changes to your repo, you can update the running app to
+the new version:
+
+  juju set meteor repo-revision=39a85df
+
+The revision can be a branch name, tag name, or commit hash.
 
 # Contact Information
 
-Author: Tim Van Steenburgh `<tim.van.steenburgh@canonical.com>`
-Report bugs at: http://bugs.launchpad.net/charms/+source/meteor
+Author: Tim Van Steenburgh <tim.van.steenburgh@canonical.com>
+Report bugs at: https://github.com/tvansteenburgh/meteor-charm/issues
 Location: http://jujucharms.com/charms/precise/meteor

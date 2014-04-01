@@ -8,7 +8,7 @@ options:
     default: todos
     description: >
       The name of the Meteor demo app to install (leaderboard,
-      todos, wordplay). This setting is ignored if
+      todos, wordplay, clock, parties). This setting is ignored if
       repo-url is set.
   repo-url:
     type: string
