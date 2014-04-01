@@ -166,7 +166,7 @@ def checkout(repo_type, path, rev):
         'git': 'checkout',
         'hg': 'update',
         }
-    checkout_cmd = cmds['repo_type']
+    checkout_cmd = cmds[repo_type]
     with chdir(path):
         update_args = [repo_type, checkout_cmd, rev]
         subprocess.check_call(update_args)
