@@ -1,6 +1,6 @@
 # Overview
 
-This charm deploys a Meteor [http://meteor.com] application.
+This charm deploys a [Meteor](http://meteor.com) application.
 
 You can deploy your own app by providing a Git or Mercurial repo url,
 or you can deploy any of the five built-in demo apps.

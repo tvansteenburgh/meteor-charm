@@ -137,7 +137,7 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="4.0745362"
-     inkscape:cx="-25.171283"
+     inkscape:cx="-54.131634"
      inkscape:cy="49.018169"
      inkscape:document-units="px"
      inkscape:current-layer="layer3"
@@ -146,8 +146,8 @@
      fit-margin-left="0"
      fit-margin-right="0"
      fit-margin-bottom="0"
-     inkscape:window-width="1911"
-     inkscape:window-height="1163"
+     inkscape:window-width="1855"
+     inkscape:window-height="1176"
      inkscape:window-x="65"
      inkscape:window-y="24"
      inkscape:window-maximized="1"
@@ -271,7 +271,7 @@
      inkscape:groupmode="layer"
      id="layer2"
      inkscape:label="BADGE"
-     style="display:inline"
+     style="display:none"
      sodipodi:insensitive="true">
     <g
        style="display:inline"
