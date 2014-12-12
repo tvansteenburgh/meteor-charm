@@ -1,7 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 from contextlib import contextmanager
-import json
 import os
 import shutil
 import subprocess
@@ -12,9 +11,9 @@ sys.path.insert(0, os.path.join(os.environ['CHARM_DIR'], 'lib'))
 
 from charmhelpers import fetch
 from charmhelpers.core import (
-        hookenv,
-        host,
-        )
+    hookenv,
+    host,
+)
 
 hooks = hookenv.Hooks()
 
@@ -24,85 +23,10 @@ BASE_DIR = '/srv/meteor'
 CODE_DIR = BASE_DIR + '/code'
 BUNDLE_DIR = BASE_DIR + '/bundle'
 BUNDLE_ARCHIVE = BASE_DIR + '/bundle.tgz'
-METEOR_CONFIG = BASE_DIR + '/.juju-config'
 NODEJS_REPO = 'ppa:chris-lea/node.js'
 PACKAGES = ['nodejs', 'build-essential', 'curl']
 DOWNLOAD_CMD = 'curl http://install.meteor.com -o /tmp/meteor-install'
 INSTALL_CMD = '/bin/sh /tmp/meteor-install'
-
-
-class Config(object):
-    """A Juju config dictionary that can write itself to
-    disk (json) and track which values have changed since
-    the previous write.
-
-    """
-    def __init__(self, path=None):
-        """Initialize a `hookenv.config(), with an optional
-        "previous" copy loaded from `path`.
-
-        """
-        self.cur_dict = hookenv.config()
-        self.prev_dict = None
-        self.path = path
-        if path:
-            self.load_previous(path)
-
-    def load_previous(self, path):
-        """Load a previous copy of config so that current values
-        can be compares to previous values.
-
-        """
-        try:
-            with open(path) as f:
-                self.prev_dict = json.load(f)
-        except IOError:
-            pass
-
-    def changed(self, key):
-        """Return true if the value for this key has changed since
-        the last save.
-
-        """
-        if self.prev_dict is None:
-            return True
-        return self.prev_dict.get(key) != self.cur_dict.get(key)
-
-    def previous(self, key):
-        """Return previous value for this key, or None if there
-        is no "previous" value.
-
-        """
-        if self.prev_dict:
-            return self.prev_dict.get(key)
-        return None
-
-    def save(self, path=None):
-        """Save this config to `path`, or to the path from which
-        it was loaded. This is a no-op of path is None or this
-        config was not loaded from a file.
-
-        Preserves items in prev_dict that do not exist in cur_dict.
-
-        """
-        path = path or self.path
-        if not path:
-            return
-        if self.prev_dict:
-            for k, v in self.prev_dict.iteritems():
-                if k not in self.cur_dict:
-                    self.cur_dict[k] = v
-        with open(path, 'w') as f:
-            json.dump(self.cur_dict, f)
-
-    def get(self, key, default=None):
-        return self.cur_dict.get(key, default)
-
-    def __getitem__(self, key):
-        return self.cur_dict[key]
-
-    def __setitem__(self, key, val):
-        self.cur_dict[key] = val
 
 
 def write_upstart(config):
@@ -206,11 +130,11 @@ def init_code(config):
             }[config['repo-type']]
         fetch.apt_install(pkg)
         clone(config['repo-type'], config['repo-url'], CODE_DIR,
-                config['repo-revision'])
+              config['repo-revision'])
     else:
         hookenv.log('Creating demo app')
-        subprocess.check_call(['mrt', 'create', '--example',
-            config['demo-app'], CODE_DIR])
+        subprocess.check_call(
+            ['mrt', 'create', '--example', config['demo-app'], CODE_DIR])
 
 
 def init_bundle(config):
@@ -230,9 +154,19 @@ def init_bundle(config):
         shutil.copytree(os.path.join(CODE_DIR, 'bundle'), BUNDLE_DIR)
 
 
+def init_dependencies(config):
+    """Install dependencies for installed meteor app.
+
+    """
+    depends_dir = os.path.join(BUNDLE_DIR, 'programs', 'server')
+    if os.path.exists(depends_dir):
+        with chdir(depends_dir):
+            subprocess.call(['npm', 'install'])
+
+
 @hooks.hook('install')
 def install():
-    config = Config(METEOR_CONFIG)
+    config = hookenv.config()
 
     host.adduser(USER, password='')
     host.mkdir(BASE_DIR, owner=USER, group=USER)
@@ -252,20 +186,20 @@ def install():
 
     init_code(config)
     init_bundle(config)
+    init_dependencies(config)
 
     hookenv.open_port(config['port'])
-    subprocess.check_call(['chown', '-R', '{user}:{user}'.format(user=USER),
-        BASE_DIR])
+    subprocess.check_call(
+        ['chown', '-R', '{user}:{user}'.format(user=USER), BASE_DIR])
 
     config['mongo_url'] = ''
     write_upstart(config)
-    config.save()
     # wait for mongodb to join before starting
 
 
 @hooks.hook('config-changed')
 def config_changed():
-    config = Config(METEOR_CONFIG)
+    config = hookenv.config()
     os.environ['HOME'] = os.path.expanduser('~' + USER)
 
     if config.changed('repo-url') or config.changed('demo-app'):
@@ -274,8 +208,8 @@ def config_changed():
         init_code(config)
     elif config.changed('repo-revision') and config['repo-url']:
         with chdir(CODE_DIR):
-            subprocess.check_call([config['repo-type'], 'pull',
-                config['repo-url']])
+            subprocess.check_call(
+                [config['repo-type'], 'pull', config['repo-url']])
         checkout(config['repo-type'], CODE_DIR, config['repo-revision'])
 
     if (config.changed('repo-url') or
@@ -283,6 +217,7 @@ def config_changed():
             config.changed('bundled') or
             config.changed('demo-app')):
         init_bundle(config)
+        init_dependencies(config)
 
     if config.changed('port'):
         hookenv.open_port(config['port'])
@@ -290,13 +225,13 @@ def config_changed():
             hookenv.close_port(config.previous('port'))
         if hookenv.is_relation_made('website'):
             hookenv.relation_set(
-                    relation_id=config.previous('website-relation-id'),
+                relation_id=config.previous('website-relation-id'),
                 relation_settings={
                     'port': config['port'],
                     'hostname': hookenv.unit_private_ip()})
 
-    subprocess.check_call(['chown', '-R', '{user}:{user}'.format(user=USER),
-        BASE_DIR])
+    subprocess.check_call(
+        ['chown', '-R', '{user}:{user}'.format(user=USER), BASE_DIR])
 
     if config.previous('mongo_url'):
         mongo_host = config.previous('mongo_url').rsplit('/', 1)[0]
@@ -304,21 +239,19 @@ def config_changed():
         config['mongo_url'] = mongo_url
 
     write_upstart(config)
-    config.save(METEOR_CONFIG)
     start()
 
 
 @hooks.hook('mongodb-relation-changed')
 def mongodb_relation_changed():
-    config = Config(METEOR_CONFIG)
+    config = hookenv.config()
     db_host = hookenv.relation_get('private-address')
     if not db_host:
         return
     db_port = hookenv.relation_get('port') or '27017'
     config['mongo_url'] = 'mongodb://{host}:{port}/{app_name}'.format(
-            host=db_host, port=db_port, app_name=config['app-name'])
+        host=db_host, port=db_port, app_name=config['app-name'])
     write_upstart(config)
-    config.save()
     start()
 
 
@@ -330,11 +263,31 @@ def mongodb_relation_departed():
 @hooks.hook('upgrade-charm')
 def upgrade_charm():
     hookenv.log('Upgrading Meteor')
-    config = Config(METEOR_CONFIG)
 
+    OLD_METEOR_CONFIG = BASE_DIR + '/.juju-config'
+    NEW_METEOR_CONFIG = os.path.join(hookenv.charm_dir(),
+                                     hookenv.Config.CONFIG_FILE_NAME)
+
+    if (os.path.exists(OLD_METEOR_CONFIG) and not
+            os.path.exists(NEW_METEOR_CONFIG)):
+        hookenv.log('Moving config from {} to {}'.format(
+            OLD_METEOR_CONFIG, NEW_METEOR_CONFIG))
+        shutil.move(OLD_METEOR_CONFIG, NEW_METEOR_CONFIG)
+
+    config = hookenv.config()
+    os.environ['HOME'] = os.path.expanduser('~' + USER)
+
+    hookenv.log('Upgrading nodejs')
+    fetch.apt_update()
+    fetch.apt_install(PACKAGES)
+
+    hookenv.log('Upgrading meteor/meteorite')
     subprocess.check_call(DOWNLOAD_CMD.split())
     subprocess.check_call(INSTALL_CMD.split())
-    init_bundle(config)
+    subprocess.check_call('npm install -g meteorite'.split())
+
+    init_dependencies(config)
+
     if host.service_running(SERVICE):
         start()
 
@@ -354,12 +307,11 @@ def stop():
 
 @hooks.hook('website-relation-joined')
 def website_relation_joined():
-    config = Config(METEOR_CONFIG)
-    hookenv.relation_set(port=config['port'],
-            hostname=hookenv.unit_private_ip())
+    config = hookenv.config()
+    hookenv.relation_set(
+        port=config['port'], hostname=hookenv.unit_private_ip())
     # save relation id so we can inform the remote side if we change ports
     config['website-relation-id'] = os.environ['JUJU_RELATION_ID']
-    config.save(METEOR_CONFIG)
 
 
 if __name__ == "__main__":
